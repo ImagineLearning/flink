@@ -17,7 +17,6 @@
 
 package org.apache.flink.contrib.streaming.state;
 
-import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.MemorySize;
 import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.memory.OpaqueMemoryResource;
@@ -37,7 +36,7 @@ import static org.apache.flink.contrib.streaming.state.RocksDBOptions.FIX_PER_TM
  */
 enum RocksDBSharedResourcesFactory {
     /** Memory allocated per Slot (shared across slot tasks), managed by Flink. */
-    SLOT_SHARED_MANAGED(true, MemoryShareScope.SLOT) {
+    SLOT_SHARED_MANAGED(false, MemoryShareScope.SLOT) {
         @Override
         protected OpaqueMemoryResource<RocksDBSharedResources> createInternal(
                 RocksDBMemoryConfiguration jobMemoryConfig,
@@ -96,16 +95,6 @@ enum RocksDBSharedResourcesFactory {
     RocksDBSharedResourcesFactory(boolean managed, MemoryShareScope shareScope) {
         this.managed = managed;
         this.shareScope = shareScope;
-    }
-
-    @VisibleForTesting
-    public boolean isManaged() {
-        return managed;
-    }
-
-    @VisibleForTesting
-    public MemoryShareScope getShareScope() {
-        return shareScope;
     }
 
     @Nullable

@@ -164,20 +164,7 @@ class ConfigurationTests(PyFlinkTestCase):
 
         self.assertEqual(str(conf), "{k1=v1, k2=1}")
 
-    def test_parse_list_value_non_standard_yaml(self):
-        # test None
-        value = None
-        expected_result = []
-        result = Configuration.parse_list_value(value, False)
-        self.assertEqual(result, expected_result)
-
-        # test parse legacy pattern
-        value = "jar1;jar2;jar3"
-        expected_result = ['jar1', 'jar2', 'jar3']
-        result = Configuration.parse_list_value(value, False)
-        self.assertEqual(result, expected_result)
-
-    def test_parse_list_value_standard_yaml(self):
+    def test_parse_list_value(self):
         # test None
         value = None
         expected_result = []
@@ -187,17 +174,17 @@ class ConfigurationTests(PyFlinkTestCase):
         # test parse YAML list
         value = "[jar1, jar2, jar3]"
         expected_result = ['jar1', 'jar2', 'jar3']
-        result = Configuration.parse_list_value(value, True)
+        result = Configuration.parse_list_value(value)
         self.assertEqual(result, expected_result)
 
         # test parse multiline YAML list
         value = "- jar1\n- jar2\n- jar3"
         expected_result = ['jar1', 'jar2', 'jar3']
-        result = Configuration.parse_list_value(value, True)
+        result = Configuration.parse_list_value(value)
         self.assertEqual(result, expected_result)
 
         # test parse legacy pattern
         value = "jar1;jar2;jar3"
         expected_result = ['jar1', 'jar2', 'jar3']
-        result = Configuration.parse_list_value(value, True)
+        result = Configuration.parse_list_value(value)
         self.assertEqual(result, expected_result)
