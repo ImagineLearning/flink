@@ -107,6 +107,7 @@ under the License.
 	</modules>
 
 	<properties>
+		<skipTests>true</skipTests> <!-- Skip tests by default, use -DskipTests=false to override -->
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<flink.hadoop.version>2.10.2</flink.hadoop.version>
@@ -986,6 +987,26 @@ under the License.
 				<activeByDefault>true</activeByDefault>
 			</activation>
 			<build>
+				<pluginManagement>
+					<plugins>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-surefire-plugin</artifactId>
+							<version>3.2.5</version> <!-- Use a recent version -->
+							<configuration>
+								<skipTests>${skipTests}</skipTests>
+							</configuration>
+						</plugin>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-failsafe-plugin</artifactId>
+							<version>3.2.5</version> <!-- Use a recent version -->
+							<configuration>
+								<skipITs>${skipTests}</skipITs> <!-- Use skipITs for Failsafe -->
+							</configuration>
+						</plugin>
+					</plugins>
+				</pluginManagement>
 				<plugins>
 					<!-- make sure we don't have any _2.10 or _2.11 dependencies when building
 					for Scala 2.12 -->
