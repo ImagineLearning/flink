@@ -804,6 +804,34 @@ under the License.
 							</descriptors>
 						</configuration>
 					</execution>
+					<execution>
+						<id>dist-tarball</id>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+						<configuration>
+							<finalName>flink-docker/flink-dist-${project.version}</finalName>
+							<appendAssemblyId>false</appendAssemblyId>
+							<descriptors>
+								<descriptor>src/main/docker-build/dist-tar-gz-archive.xml</descriptor>
+							</descriptors>
+						</configuration>
+					</execution>
+					<execution>
+						<id>docker-build-files</id>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+						<configuration>
+							<finalName>flink-docker</finalName>
+							<descriptors>
+								<descriptor>src/main/docker-build/docker-build-files.xml</descriptor>
+							</descriptors>
+						</configuration>
+					</execution>
+					
 				</executions>
 			</plugin>
 
