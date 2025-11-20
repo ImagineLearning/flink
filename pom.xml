@@ -953,6 +953,14 @@ under the License.
 		</dependencies>
 	</dependencyManagement>
 
+	<distributionManagement>
+		<repository>
+			<id>github ImagineLearning</id> <!-- this is the ID of the server -->
+			<name>GitHub ImagineLearning Apache Maven Packages</name>
+			<url>https://maven.pkg.github.com/ImagineLearning/flink</url>
+		</repository>
+	</distributionManagement>
+
 	<profiles>
 		<profile>
 			<id>intellij</id>
@@ -1612,6 +1620,9 @@ under the License.
 						</licenseFamily>
 					</licenseFamilies>
 					<excludes>
+						<exclude>il.yaml</exclude>
+						<exclude>docker-image-deploy.yaml</exclude>
+						<exclude>version</exclude><!-- OTK v2 CI cruft -->
 						<!-- Additional files like .gitignore etc.-->
 						<exclude>**/.*/**</exclude>
 						<exclude>**/*.prefs</exclude>
