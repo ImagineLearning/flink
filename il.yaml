@@ -17,3 +17,4 @@ otk:
       - dev
   deployables:
     - ./docker-image-deploy.yaml
+
