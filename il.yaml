@@ -11,7 +11,7 @@ otk:
     languageVersion: 11
     java:
       mavenDeploy: true
-  platform: amd64
+    platform: amd64
   deployConfig:
     environments:
       - dev
