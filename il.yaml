@@ -5,7 +5,7 @@ meta:
   system: jetstream
 
 otk:
-  enabled: false
+  enabled: true
   build:
     language: java
     languageVersion: 11
