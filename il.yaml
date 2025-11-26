@@ -12,6 +12,7 @@ otk:
     java:
       mavenDeploy: true
     platform: amd64
+    linuxDistribution: ubuntu    
   deployConfig:
     environments:
       - dev
