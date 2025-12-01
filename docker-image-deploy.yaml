@@ -1,0 +1,7 @@
+global:
+  name: flink
+  type: image
+
+deployment:
+  image:
+    buildContext: "flink-dist/target/flink-docker"

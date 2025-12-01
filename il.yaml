@@ -1,0 +1,21 @@
+meta:
+  owner: jetstream
+  trackingId: 87b2338d-3ea4-45cc-bd63-73d1f4a73a6c
+  domain: data
+  system: jetstream
+
+otk:
+  enabled: true
+  build:
+    language: java
+    languageVersion: 11
+    java:
+      mavenDeploy: true
+    platform: amd64
+    linuxDistribution: ubuntu    
+  deployConfig:
+    environments:
+      - dev
+  deployables:
+    - ./docker-image-deploy.yaml
+

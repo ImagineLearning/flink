@@ -457,8 +457,10 @@ public final class PojoSerializer<T> extends TypeSerializer<T> {
             }
             target = builder.build();
         } else if ((flags & NO_SUBCLASS) != 0) {
+            String fieldName = "unknown";
             try {
                 for (int i = 0; i < numFields; i++) {
+                    fieldName = (fields[i] != null) ? fields[i].getName() : "_field_" + i;
                     boolean isNull = source.readBoolean();
                     Object fieldValue = isNull ? null : fieldSerializers[i].deserialize(source);
                     if (fields[i] != null) {
@@ -469,6 +471,51 @@ public final class PojoSerializer<T> extends TypeSerializer<T> {
                 throw new RuntimeException(
                         "Error during POJO copy, this should not happen since we check the fields before.",
                         e);
+            } catch (Throwable t) {
+                StringBuilder fieldNamesBuffer = new StringBuilder("[");
+                StringBuilder fieldSerializersBuffer = new StringBuilder("[");
+                for (int i = 0; i < numFields; i++) {
+                    if (i > 0) {
+                        fieldNamesBuffer.append(",");
+                        fieldSerializersBuffer.append(",");
+                    }
+                    fieldNamesBuffer.append(
+                            fieldName = (fields[i] != null) ? fields[i].getName() : null);
+                    fieldSerializersBuffer.append(
+                            (fieldSerializers != null)
+                                    ? fieldSerializers[i].getClass().getName()
+                                    : "null");
+                }
+                fieldNamesBuffer.append("]");
+                fieldSerializersBuffer.append("]");
+                String bufferEncoded =
+                        Arrays.stream(source.getClass().getDeclaredFields())
+                                .filter(f -> "buffer".equals(f.getName()))
+                                .map(
+                                        f -> {
+                                            try {
+                                                f.setAccessible(true);
+                                                byte[] buffer = (byte[]) f.get(source);
+                                                return java.util.Base64.getEncoder()
+                                                        .encodeToString(buffer);
+                                            } catch (Throwable x) {
+                                                return x.getClass().getSimpleName();
+                                            }
+                                        })
+                                .findAny()
+                                .orElse("source.buffer field not found");
+                throw new RuntimeException(
+                        "Failed to deserialize value for "
+                                + fieldName
+                                + " in type "
+                                + clazz.getName()
+                                + " buffer: "
+                                + bufferEncoded
+                                + ", fields="
+                                + fieldNamesBuffer
+                                + ", serializers="
+                                + fieldSerializersBuffer,
+                        t);
             }
         } else {
             if (subclassSerializer != null) {
