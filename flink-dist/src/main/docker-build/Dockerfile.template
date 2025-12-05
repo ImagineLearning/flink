@@ -15,6 +15,42 @@
 #  See the License for the specific language governing permissions and
 # limitations under the License.
 ###############################################################################
+FROM eclipse-temurin:11-jre-jammy as stage1
+
+# This Dockerfile implements the important steps from the official Apache Flink docker image build,
+# but instead of fetching the Flink binary distribution from the Apache mirrors and editing it in a
+# RUN command, it uses ADD to include a local Flink binary distribution tarball present in the
+# docker build context.  The edit creates a duplicate layer of the ADD'ed Flink distribution, so a
+# multi-stage build is used to keep the final image size smaller.
+
+ENV FLINK_HOME=/opt/flink
+WORKDIR $FLINK_HOME
+
+# Install Flink
+ADD flink-dist-${project.version}.tar.gz /opt/flink/
+RUN set -ex; \
+  \
+  groupadd --system --gid=9999 flink && \
+  useradd --system --home-dir $FLINK_HOME --uid=9999 --gid=flink flink; \
+  chown -R flink:flink .; \
+  \
+  # Replace default REST/RPC endpoint bind address to use the container's network interface \
+  CONF_FILE="$FLINK_HOME/conf/flink-conf.yaml"; \
+  if [ ! -e "$FLINK_HOME/conf/flink-conf.yaml" ]; then \
+    CONF_FILE="${FLINK_HOME}/conf/config.yaml"; \
+    /bin/bash "$FLINK_HOME/bin/config-parser-utils.sh" "${FLINK_HOME}/conf" "${FLINK_HOME}/bin" "${FLINK_HOME}/lib" \
+        "-repKV" "rest.address,localhost,0.0.0.0" \
+        "-repKV" "rest.bind-address,localhost,0.0.0.0" \
+        "-repKV" "jobmanager.bind-host,localhost,0.0.0.0" \
+        "-repKV" "taskmanager.bind-host,localhost,0.0.0.0" \
+        "-rmKV" "taskmanager.host=localhost"; \
+  else \
+    sed -i 's/rest.address: localhost/rest.address: 0.0.0.0/g' "$CONF_FILE"; \
+    sed -i 's/rest.bind-address: localhost/rest.bind-address: 0.0.0.0/g' "$CONF_FILE"; \
+    sed -i 's/jobmanager.bind-host: localhost/jobmanager.bind-host: 0.0.0.0/g' "$CONF_FILE"; \
+    sed -i 's/taskmanager.bind-host: localhost/taskmanager.bind-host: 0.0.0.0/g' "$CONF_FILE"; \
+    sed -i '/taskmanager.host: localhost/d' "$CONF_FILE"; \
+  fi;
 
 FROM eclipse-temurin:11-jre-jammy
 
@@ -43,12 +79,6 @@ RUN set -ex; \
   chmod +x /usr/local/bin/gosu; \
   gosu nobody true
 
-# Configure Flink version
-ENV FLINK_TGZ_URL= \
-    FLINK_ASC_URL= \
-    GPG_KEY= \
-    CHECK_GPG=false
-
 # Prepare environment
 ENV FLINK_HOME=/opt/flink
 ENV PATH=$FLINK_HOME/bin:$PATH
@@ -56,55 +86,7 @@ RUN groupadd --system --gid=9999 flink && \
     useradd --system --home-dir $FLINK_HOME --uid=9999 --gid=flink flink
 WORKDIR $FLINK_HOME
 
-# Install Flink
-COPY flink-dist-${project.version}.tar.gz /opt/flink/flink.tgz
-RUN set -ex; \
-  case "$FLINK_TGZ_URL" in \
-    http*) \
-      wget -nv -O flink.tgz "$FLINK_TGZ_URL"; \
-      ;; \
-    *) \
-     # Use the locally copied TGZ file \
-     ;; \
-  esac; \
-  \
-  if [ "$CHECK_GPG" = "true" ]; then \
-    wget -nv -O flink.tgz.asc "$FLINK_ASC_URL"; \
-    export GNUPGHOME="$(mktemp -d)"; \
-    for server in ha.pool.sks-keyservers.net $(shuf -e \
-                            hkp://p80.pool.sks-keyservers.net:80 \
-                            keyserver.ubuntu.com \
-                            hkp://keyserver.ubuntu.com:80 \
-                            pgp.mit.edu) ; do \
-        gpg --batch --keyserver "$server" --recv-keys "$GPG_KEY" && break || : ; \
-    done && \
-    gpg --batch --verify flink.tgz.asc flink.tgz; \
-    gpgconf --kill all; \
-    rm -rf "$GNUPGHOME" flink.tgz.asc; \
-  fi; \
-  \
-  tar -xf flink.tgz --strip-components=1; \
-  rm flink.tgz; \
-  \
-  chown -R flink:flink .; \
-  \
-  # Replace default REST/RPC endpoint bind address to use the container's network interface \
-  CONF_FILE="$FLINK_HOME/conf/flink-conf.yaml"; \
-  if [ ! -e "$FLINK_HOME/conf/flink-conf.yaml" ]; then \
-    CONF_FILE="${FLINK_HOME}/conf/config.yaml"; \
-    /bin/bash "$FLINK_HOME/bin/config-parser-utils.sh" "${FLINK_HOME}/conf" "${FLINK_HOME}/bin" "${FLINK_HOME}/lib" \
-        "-repKV" "rest.address,localhost,0.0.0.0" \
-        "-repKV" "rest.bind-address,localhost,0.0.0.0" \
-        "-repKV" "jobmanager.bind-host,localhost,0.0.0.0" \
-        "-repKV" "taskmanager.bind-host,localhost,0.0.0.0" \
-        "-rmKV" "taskmanager.host=localhost"; \
-  else \
-    sed -i 's/rest.address: localhost/rest.address: 0.0.0.0/g' "$CONF_FILE"; \
-    sed -i 's/rest.bind-address: localhost/rest.bind-address: 0.0.0.0/g' "$CONF_FILE"; \
-    sed -i 's/jobmanager.bind-host: localhost/jobmanager.bind-host: 0.0.0.0/g' "$CONF_FILE"; \
-    sed -i 's/taskmanager.bind-host: localhost/taskmanager.bind-host: 0.0.0.0/g' "$CONF_FILE"; \
-    sed -i '/taskmanager.host: localhost/d' "$CONF_FILE"; \
-  fi;
+COPY --from=stage1 /opt/flink /opt/flink
 
 # Configure container
 COPY docker-entrypoint.sh /
