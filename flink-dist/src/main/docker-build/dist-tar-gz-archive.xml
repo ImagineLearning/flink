@@ -24,7 +24,7 @@ under the License.
 	<includeBaseDirectory>false</includeBaseDirectory>
 	<fileSets>
 		<fileSet>
-			<directory>target/flink-${project.version}-bin</directory>
+			<directory>target/flink-${project.version}-bin/flink-${project.version}</directory>
 			<outputDirectory>.</outputDirectory>
 		</fileSet>
 	</fileSets>
