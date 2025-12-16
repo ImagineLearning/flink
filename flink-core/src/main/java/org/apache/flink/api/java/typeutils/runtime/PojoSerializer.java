@@ -414,6 +414,20 @@ public final class PojoSerializer<T> extends TypeSerializer<T> {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public T deserialize(DataInputView source) throws IOException {
+        try {
+            return doDeserialize(source);
+        } catch (Throwable t) {
+            if ("true".equals(System.getenv("CONTINUE_ON_POJO_DESERIALIZATION_FAILURE"))) {
+                new RuntimeException("Failed to deserialize value, source is corrupt", t)
+                        .printStackTrace();
+                return null;
+            }
+            throw t;
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private T doDeserialize(DataInputView source) throws IOException {
         int flags = source.readByte();
         if ((flags & IS_NULL) != 0) {
             return null;
