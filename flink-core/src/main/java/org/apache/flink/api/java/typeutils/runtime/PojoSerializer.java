@@ -39,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -92,6 +93,8 @@ public final class PojoSerializer<T> extends TypeSerializer<T> {
     private transient ClassLoader cl;
 
     @Nullable private transient JavaRecordBuilderFactory<T> recordFactory;
+
+    private static final LongAdder deserializationFailureCount = new LongAdder();
 
     /** Constructor to create a new {@link PojoSerializer}. */
     @SuppressWarnings("unchecked")
@@ -418,8 +421,12 @@ public final class PojoSerializer<T> extends TypeSerializer<T> {
             return doDeserialize(source);
         } catch (Throwable t) {
             if ("true".equals(System.getenv("CONTINUE_ON_POJO_DESERIALIZATION_FAILURE"))) {
-                new RuntimeException("Failed to deserialize value, source is corrupt", t)
-                        .printStackTrace();
+                deserializationFailureCount.increment();
+                if (deserializationFailureCount.sum() < 1000) {
+                    t.printStackTrace();
+                } else {
+                    System.out.println(t.getMessage());
+                }
                 return null;
             }
             throw t;
