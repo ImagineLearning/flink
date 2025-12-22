@@ -39,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
@@ -92,6 +93,8 @@ public final class PojoSerializer<T> extends TypeSerializer<T> {
     private transient ClassLoader cl;
 
     @Nullable private transient JavaRecordBuilderFactory<T> recordFactory;
+
+    private static final LongAdder deserializationFailureCount = new LongAdder();
 
     /** Constructor to create a new {@link PojoSerializer}. */
     @SuppressWarnings("unchecked")
@@ -414,6 +417,24 @@ public final class PojoSerializer<T> extends TypeSerializer<T> {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public T deserialize(DataInputView source) throws IOException {
+        try {
+            return doDeserialize(source);
+        } catch (Throwable t) {
+            if ("true".equals(System.getenv("CONTINUE_ON_POJO_DESERIALIZATION_FAILURE"))) {
+                deserializationFailureCount.increment();
+                if (deserializationFailureCount.sum() < 1000) {
+                    t.printStackTrace();
+                } else {
+                    System.out.println(t.getMessage());
+                }
+                return null;
+            }
+            throw t;
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private T doDeserialize(DataInputView source) throws IOException {
         int flags = source.readByte();
         if ((flags & IS_NULL) != 0) {
             return null;
@@ -457,8 +478,10 @@ public final class PojoSerializer<T> extends TypeSerializer<T> {
             }
             target = builder.build();
         } else if ((flags & NO_SUBCLASS) != 0) {
+            String fieldName = "unknown";
             try {
                 for (int i = 0; i < numFields; i++) {
+                    fieldName = (fields[i] != null) ? fields[i].getName() : "_field_" + i;
                     boolean isNull = source.readBoolean();
                     Object fieldValue = isNull ? null : fieldSerializers[i].deserialize(source);
                     if (fields[i] != null) {
@@ -469,6 +492,51 @@ public final class PojoSerializer<T> extends TypeSerializer<T> {
                 throw new RuntimeException(
                         "Error during POJO copy, this should not happen since we check the fields before.",
                         e);
+            } catch (Throwable t) {
+                StringBuilder fieldNamesBuffer = new StringBuilder("[");
+                StringBuilder fieldSerializersBuffer = new StringBuilder("[");
+                for (int i = 0; i < numFields; i++) {
+                    if (i > 0) {
+                        fieldNamesBuffer.append(",");
+                        fieldSerializersBuffer.append(",");
+                    }
+                    fieldNamesBuffer.append(
+                            fieldName = (fields[i] != null) ? fields[i].getName() : null);
+                    fieldSerializersBuffer.append(
+                            (fieldSerializers != null)
+                                    ? fieldSerializers[i].getClass().getName()
+                                    : "null");
+                }
+                fieldNamesBuffer.append("]");
+                fieldSerializersBuffer.append("]");
+                String bufferEncoded =
+                        Arrays.stream(source.getClass().getDeclaredFields())
+                                .filter(f -> "buffer".equals(f.getName()))
+                                .map(
+                                        f -> {
+                                            try {
+                                                f.setAccessible(true);
+                                                byte[] buffer = (byte[]) f.get(source);
+                                                return java.util.Base64.getEncoder()
+                                                        .encodeToString(buffer);
+                                            } catch (Throwable x) {
+                                                return x.getClass().getSimpleName();
+                                            }
+                                        })
+                                .findAny()
+                                .orElse("source.buffer field not found");
+                throw new RuntimeException(
+                        "Failed to deserialize value for "
+                                + fieldName
+                                + " in type "
+                                + clazz.getName()
+                                + " buffer: "
+                                + bufferEncoded
+                                + ", fields="
+                                + fieldNamesBuffer
+                                + ", serializers="
+                                + fieldSerializersBuffer,
+                        t);
             }
         } else {
             if (subclassSerializer != null) {

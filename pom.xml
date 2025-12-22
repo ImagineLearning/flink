@@ -28,7 +28,7 @@ under the License.
 
 	<groupId>org.apache.flink</groupId>
 	<artifactId>flink-parent</artifactId>
-	<version>1.20.3</version>
+	<version>1.20.3.il.1</version>
 
 	<name>Flink : </name>
 	<packaging>pom</packaging>
@@ -107,6 +107,7 @@ under the License.
 	</modules>
 
 	<properties>
+		<skipTests>true</skipTests> <!-- Skip tests by default, use -DskipTests=false to override -->
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 		<flink.hadoop.version>2.10.2</flink.hadoop.version>
@@ -953,6 +954,14 @@ under the License.
 		</dependencies>
 	</dependencyManagement>
 
+	<distributionManagement>
+		<repository>
+			<id>github ImagineLearning</id> <!-- this is the ID of the server -->
+			<name>GitHub ImagineLearning Apache Maven Packages</name>
+			<url>https://maven.pkg.github.com/ImagineLearning/flink</url>
+		</repository>
+	</distributionManagement>
+
 	<profiles>
 		<profile>
 			<id>intellij</id>
@@ -978,6 +987,26 @@ under the License.
 				<activeByDefault>true</activeByDefault>
 			</activation>
 			<build>
+				<pluginManagement>
+					<plugins>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-surefire-plugin</artifactId>
+							<version>3.2.5</version> <!-- Use a recent version -->
+							<configuration>
+								<skipTests>${skipTests}</skipTests>
+							</configuration>
+						</plugin>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-failsafe-plugin</artifactId>
+							<version>3.2.5</version> <!-- Use a recent version -->
+							<configuration>
+								<skipITs>${skipTests}</skipITs> <!-- Use skipITs for Failsafe -->
+							</configuration>
+						</plugin>
+					</plugins>
+				</pluginManagement>
 				<plugins>
 					<!-- make sure we don't have any _2.10 or _2.11 dependencies when building
 					for Scala 2.12 -->
@@ -1612,6 +1641,9 @@ under the License.
 						</licenseFamily>
 					</licenseFamilies>
 					<excludes>
+						<exclude>il.yaml</exclude>
+						<exclude>docker-image-deploy.yaml</exclude>
+						<exclude>version</exclude><!-- OTK v2 CI cruft -->
 						<!-- Additional files like .gitignore etc.-->
 						<exclude>**/.*/**</exclude>
 						<exclude>**/*.prefs</exclude>
