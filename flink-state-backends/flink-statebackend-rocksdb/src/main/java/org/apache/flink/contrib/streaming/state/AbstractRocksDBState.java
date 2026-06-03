@@ -48,6 +48,9 @@ import java.io.IOException;
  */
 public abstract class AbstractRocksDBState<K, N, V> implements InternalKvState<K, N, V>, State {
 
+    /** The name of this state, used for diagnostic logging. */
+    protected String stateName;
+
     /** Serializer for the namespace. */
     TypeSerializer<N> namespaceSerializer;
 
@@ -233,6 +236,11 @@ public abstract class AbstractRocksDBState<K, N, V> implements InternalKvState<K
 
     protected AbstractRocksDBState<K, N, V> setDefaultValue(V defaultValue) {
         this.defaultValue = defaultValue;
+        return this;
+    }
+
+    protected AbstractRocksDBState<K, N, V> setStateName(String stateName) {
+        this.stateName = stateName;
         return this;
     }
 

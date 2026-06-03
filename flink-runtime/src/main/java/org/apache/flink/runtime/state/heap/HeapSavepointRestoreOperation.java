@@ -21,6 +21,7 @@ package org.apache.flink.runtime.state.heap;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.ListSerializer;
 import org.apache.flink.api.common.typeutils.base.MapSerializer;
+import org.apache.flink.api.java.typeutils.runtime.DeserializationContext;
 import org.apache.flink.core.memory.DataInputDeserializer;
 import org.apache.flink.runtime.state.InternalKeyContext;
 import org.apache.flink.runtime.state.KeyGroupRange;
@@ -199,37 +200,43 @@ public class HeapSavepointRestoreOperation<K> implements RestoreOperation<Void> 
         int keyGroup = readKeyGroup(keyGroupPrefixBytes, entryKeyDeserializer);
         K key = readKey(keySerializer, entryKeyDeserializer, isAmbigousKey);
         Object namespace = readNamespace(namespaceSerializer, entryKeyDeserializer, isAmbigousKey);
-        switch (metaInfo.getStateType()) {
-            case LIST:
-                stateTable.put(
-                        key,
-                        keyGroup,
-                        namespace,
-                        listDelimitedSerializer.deserializeList(
-                                groupEntry.getValue(),
-                                ((ListSerializer<?>) stateSerializer).getElementSerializer()));
-                break;
-            case VALUE:
-            case REDUCING:
-            case FOLDING:
-            case AGGREGATING:
-                stateTable.put(
-                        key,
-                        keyGroup,
-                        namespace,
-                        stateSerializer.deserialize(entryValueDeserializer));
-                break;
-            case MAP:
-                deserializeMapStateEntry(
-                        (StateTable<K, Object, Map<Object, Object>>)
-                                (StateTable<K, ?, ?>) stateTable,
-                        keyGroup,
-                        key,
-                        namespace,
-                        (MapSerializer<Object, Object>) stateSerializer);
-                break;
-            default:
-                throw new IllegalStateException("Unknown state type: " + metaInfo.getStateType());
+        DeserializationContext.set(key, infoSnapshot.getName());
+        try {
+            switch (metaInfo.getStateType()) {
+                case LIST:
+                    stateTable.put(
+                            key,
+                            keyGroup,
+                            namespace,
+                            listDelimitedSerializer.deserializeList(
+                                    groupEntry.getValue(),
+                                    ((ListSerializer<?>) stateSerializer).getElementSerializer()));
+                    break;
+                case VALUE:
+                case REDUCING:
+                case FOLDING:
+                case AGGREGATING:
+                    stateTable.put(
+                            key,
+                            keyGroup,
+                            namespace,
+                            stateSerializer.deserialize(entryValueDeserializer));
+                    break;
+                case MAP:
+                    deserializeMapStateEntry(
+                            (StateTable<K, Object, Map<Object, Object>>)
+                                    (StateTable<K, ?, ?>) stateTable,
+                            keyGroup,
+                            key,
+                            namespace,
+                            (MapSerializer<Object, Object>) stateSerializer);
+                    break;
+                default:
+                    throw new IllegalStateException(
+                            "Unknown state type: " + metaInfo.getStateType());
+            }
+        } finally {
+            DeserializationContext.clear();
         }
     }
 

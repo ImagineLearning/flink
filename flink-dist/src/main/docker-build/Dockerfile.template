@@ -87,6 +87,7 @@ RUN groupadd --system --gid=9999 flink && \
 WORKDIR $FLINK_HOME
 
 COPY --from=stage1 /opt/flink /opt/flink
+RUN chown -R flink:flink /opt/flink
 
 # Configure container
 COPY docker-entrypoint.sh /

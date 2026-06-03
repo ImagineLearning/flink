@@ -705,13 +705,15 @@ class RocksDBMapState<K, N, UK, UV> extends AbstractRocksDBState<K, N, Map<UK, U
             Tuple2<ColumnFamilyHandle, RegisteredKeyValueStateBackendMetaInfo<N, SV>>
                     registerResult,
             RocksDBKeyedStateBackend<K> backend) {
-        return (IS)
+        RocksDBMapState<K, N, UK, UV> state =
                 new RocksDBMapState<>(
                         registerResult.f0,
                         registerResult.f1.getNamespaceSerializer(),
                         (TypeSerializer<Map<UK, UV>>) registerResult.f1.getStateSerializer(),
                         (Map<UK, UV>) stateDesc.getDefaultValue(),
                         backend);
+        state.setStateName(stateDesc.getName());
+        return (IS) state;
     }
 
     @SuppressWarnings("unchecked")
@@ -726,7 +728,8 @@ class RocksDBMapState<K, N, UK, UV> extends AbstractRocksDBState<K, N, Map<UK, U
                         .setValueSerializer(
                                 (TypeSerializer<Map<UK, UV>>)
                                         registerResult.f1.getStateSerializer())
-                        .setDefaultValue((Map<UK, UV>) stateDesc.getDefaultValue());
+                        .setDefaultValue((Map<UK, UV>) stateDesc.getDefaultValue())
+                        .setStateName(stateDesc.getName());
     }
 
     /**
