@@ -23,6 +23,7 @@ import org.apache.flink.api.common.state.StateDescriptor;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.runtime.DeserializationContext;
 import org.apache.flink.runtime.state.RegisteredKeyValueStateBackendMetaInfo;
 import org.apache.flink.runtime.state.internal.InternalValueState;
 
@@ -85,7 +86,12 @@ class RocksDBValueState<K, N, V> extends AbstractRocksDBState<K, N, V>
                 return getDefaultValue();
             }
             dataInputView.setBuffer(valueBytes);
-            return valueSerializer.deserialize(dataInputView);
+            DeserializationContext.set(backend.getCurrentKey(), stateName);
+            try {
+                return valueSerializer.deserialize(dataInputView);
+            } finally {
+                DeserializationContext.clear();
+            }
         } catch (RocksDBException e) {
             throw new IOException("Error while retrieving data from RocksDB.", e);
         }
@@ -115,13 +121,15 @@ class RocksDBValueState<K, N, V> extends AbstractRocksDBState<K, N, V>
             Tuple2<ColumnFamilyHandle, RegisteredKeyValueStateBackendMetaInfo<N, SV>>
                     registerResult,
             RocksDBKeyedStateBackend<K> backend) {
-        return (IS)
+        RocksDBValueState<K, N, SV> state =
                 new RocksDBValueState<>(
                         registerResult.f0,
                         registerResult.f1.getNamespaceSerializer(),
                         registerResult.f1.getStateSerializer(),
                         stateDesc.getDefaultValue(),
                         backend);
+        state.setStateName(stateDesc.getName());
+        return (IS) state;
     }
 
     @SuppressWarnings("unchecked")
@@ -134,6 +142,7 @@ class RocksDBValueState<K, N, V> extends AbstractRocksDBState<K, N, V>
                 ((RocksDBValueState<K, N, SV>) existingState)
                         .setNamespaceSerializer(registerResult.f1.getNamespaceSerializer())
                         .setValueSerializer(registerResult.f1.getStateSerializer())
-                        .setDefaultValue(stateDesc.getDefaultValue());
+                        .setDefaultValue(stateDesc.getDefaultValue())
+                        .setStateName(stateDesc.getName());
     }
 }

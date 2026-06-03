@@ -25,6 +25,7 @@ import org.apache.flink.api.common.state.State;
 import org.apache.flink.api.common.state.StateDescriptor;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.runtime.DeserializationContext;
 import org.apache.flink.runtime.state.RegisteredKeyValueStateBackendMetaInfo;
 import org.apache.flink.runtime.state.internal.InternalReducingState;
 
@@ -115,12 +116,17 @@ class RocksDBReducingState<K, N, V> extends AbstractRocksDBAppendingState<K, N, 
                 if (valueBytes != null) {
                     backend.db.delete(columnFamily, writeOptions, sourceKey);
                     dataInputView.setBuffer(valueBytes);
-                    V value = valueSerializer.deserialize(dataInputView);
+                    DeserializationContext.set(backend.getCurrentKey(), stateName);
+                    try {
+                        V value = valueSerializer.deserialize(dataInputView);
 
-                    if (current != null) {
-                        current = reduceFunction.reduce(current, value);
-                    } else {
-                        current = value;
+                        if (current != null) {
+                            current = reduceFunction.reduce(current, value);
+                        } else {
+                            current = value;
+                        }
+                    } finally {
+                        DeserializationContext.clear();
                     }
                 }
             }
@@ -136,9 +142,14 @@ class RocksDBReducingState<K, N, V> extends AbstractRocksDBAppendingState<K, N, 
             if (targetValueBytes != null) {
                 dataInputView.setBuffer(targetValueBytes);
                 // target also had a value, merge
-                V value = valueSerializer.deserialize(dataInputView);
+                DeserializationContext.set(backend.getCurrentKey(), stateName);
+                try {
+                    V value = valueSerializer.deserialize(dataInputView);
 
-                current = reduceFunction.reduce(current, value);
+                    current = reduceFunction.reduce(current, value);
+                } finally {
+                    DeserializationContext.clear();
+                }
             }
 
             // serialize the resulting value
@@ -161,7 +172,7 @@ class RocksDBReducingState<K, N, V> extends AbstractRocksDBAppendingState<K, N, 
             Tuple2<ColumnFamilyHandle, RegisteredKeyValueStateBackendMetaInfo<N, SV>>
                     registerResult,
             RocksDBKeyedStateBackend<K> backend) {
-        return (IS)
+        RocksDBReducingState<K, N, SV> state =
                 new RocksDBReducingState<>(
                         registerResult.f0,
                         registerResult.f1.getNamespaceSerializer(),
@@ -169,6 +180,8 @@ class RocksDBReducingState<K, N, V> extends AbstractRocksDBAppendingState<K, N, 
                         stateDesc.getDefaultValue(),
                         ((ReducingStateDescriptor<SV>) stateDesc).getReduceFunction(),
                         backend);
+        state.setStateName(stateDesc.getName());
+        return (IS) state;
     }
 
     @SuppressWarnings("unchecked")
@@ -182,6 +195,7 @@ class RocksDBReducingState<K, N, V> extends AbstractRocksDBAppendingState<K, N, 
                         .setReduceFunction(
                                 ((ReducingStateDescriptor<SV>) stateDesc).getReduceFunction())
                         .setNamespaceSerializer(registerResult.f1.getNamespaceSerializer())
-                        .setDefaultValue(stateDesc.getDefaultValue());
+                        .setDefaultValue(stateDesc.getDefaultValue())
+                        .setStateName(stateDesc.getName());
     }
 }

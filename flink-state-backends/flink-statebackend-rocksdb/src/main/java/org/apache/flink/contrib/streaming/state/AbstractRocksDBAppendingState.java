@@ -19,6 +19,7 @@
 package org.apache.flink.contrib.streaming.state;
 
 import org.apache.flink.api.common.typeutils.TypeSerializer;
+import org.apache.flink.api.java.typeutils.runtime.DeserializationContext;
 import org.apache.flink.runtime.state.internal.InternalAppendingState;
 
 import org.rocksdb.ColumnFamilyHandle;
@@ -59,7 +60,12 @@ abstract class AbstractRocksDBAppendingState<K, N, IN, SV, OUT>
             return null;
         }
         dataInputView.setBuffer(valueBytes);
-        return valueSerializer.deserialize(dataInputView);
+        DeserializationContext.set(backend.getCurrentKey(), stateName);
+        try {
+            return valueSerializer.deserialize(dataInputView);
+        } finally {
+            DeserializationContext.clear();
+        }
     }
 
     @Override

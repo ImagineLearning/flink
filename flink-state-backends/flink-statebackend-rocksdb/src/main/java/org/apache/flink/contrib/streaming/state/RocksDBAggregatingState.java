@@ -25,6 +25,7 @@ import org.apache.flink.api.common.state.State;
 import org.apache.flink.api.common.state.StateDescriptor;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.runtime.DeserializationContext;
 import org.apache.flink.runtime.state.RegisteredKeyValueStateBackendMetaInfo;
 import org.apache.flink.runtime.state.internal.InternalAggregatingState;
 
@@ -123,12 +124,17 @@ class RocksDBAggregatingState<K, N, T, ACC, R>
                 if (valueBytes != null) {
                     backend.db.delete(columnFamily, writeOptions, sourceKey);
                     dataInputView.setBuffer(valueBytes);
-                    ACC value = valueSerializer.deserialize(dataInputView);
+                    DeserializationContext.set(backend.getCurrentKey(), stateName);
+                    try {
+                        ACC value = valueSerializer.deserialize(dataInputView);
 
-                    if (current != null) {
-                        current = aggFunction.merge(current, value);
-                    } else {
-                        current = value;
+                        if (current != null) {
+                            current = aggFunction.merge(current, value);
+                        } else {
+                            current = value;
+                        }
+                    } finally {
+                        DeserializationContext.clear();
                     }
                 }
             }
@@ -144,9 +150,14 @@ class RocksDBAggregatingState<K, N, T, ACC, R>
             if (targetValueBytes != null) {
                 // target also had a value, merge
                 dataInputView.setBuffer(targetValueBytes);
-                ACC value = valueSerializer.deserialize(dataInputView);
+                DeserializationContext.set(backend.getCurrentKey(), stateName);
+                try {
+                    ACC value = valueSerializer.deserialize(dataInputView);
 
-                current = aggFunction.merge(current, value);
+                    current = aggFunction.merge(current, value);
+                } finally {
+                    DeserializationContext.clear();
+                }
             }
 
             // serialize the resulting value
@@ -170,7 +181,7 @@ class RocksDBAggregatingState<K, N, T, ACC, R>
             Tuple2<ColumnFamilyHandle, RegisteredKeyValueStateBackendMetaInfo<N, SV>>
                     registerResult,
             RocksDBKeyedStateBackend<K> backend) {
-        return (IS)
+        RocksDBAggregatingState<K, N, ?, SV, ?> state =
                 new RocksDBAggregatingState<>(
                         registerResult.f0,
                         registerResult.f1.getNamespaceSerializer(),
@@ -178,6 +189,8 @@ class RocksDBAggregatingState<K, N, T, ACC, R>
                         stateDesc.getDefaultValue(),
                         ((AggregatingStateDescriptor<?, SV, ?>) stateDesc).getAggregateFunction(),
                         backend);
+        state.setStateName(stateDesc.getName());
+        return (IS) state;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -192,6 +205,7 @@ class RocksDBAggregatingState<K, N, T, ACC, R>
                                 ((AggregatingStateDescriptor) stateDesc).getAggregateFunction())
                         .setNamespaceSerializer(registerResult.f1.getNamespaceSerializer())
                         .setValueSerializer(registerResult.f1.getStateSerializer())
-                        .setDefaultValue(stateDesc.getDefaultValue());
+                        .setDefaultValue(stateDesc.getDefaultValue())
+                        .setStateName(stateDesc.getName());
     }
 }

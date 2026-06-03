@@ -422,10 +422,17 @@ public final class PojoSerializer<T> extends TypeSerializer<T> {
         } catch (Throwable t) {
             if ("true".equals(System.getenv("CONTINUE_ON_POJO_DESERIALIZATION_FAILURE"))) {
                 deserializationFailureCount.increment();
+                Object key = DeserializationContext.getCurrentKey();
+                String sName = DeserializationContext.getCurrentStateName();
+                String context = "";
+                if (key != null || sName != null) {
+                    context = " [state=" + sName + ", key=" + key + "]";
+                }
                 if (deserializationFailureCount.sum() < 1000) {
+                    System.err.println("Deserialization failure" + context + ": " + t.getMessage());
                     t.printStackTrace();
                 } else {
-                    System.out.println(t.getMessage());
+                    System.out.println(t.getMessage() + context);
                 }
                 return null;
             }
@@ -525,11 +532,19 @@ public final class PojoSerializer<T> extends TypeSerializer<T> {
                                         })
                                 .findAny()
                                 .orElse("source.buffer field not found");
+                Object deserializationKey = DeserializationContext.getCurrentKey();
+                String deserializationStateName = DeserializationContext.getCurrentStateName();
+                String contextInfo = "";
+                if (deserializationKey != null || deserializationStateName != null) {
+                    contextInfo =
+                            ", state=" + deserializationStateName + ", key=" + deserializationKey;
+                }
                 throw new RuntimeException(
                         "Failed to deserialize value for "
                                 + fieldName
                                 + " in type "
                                 + clazz.getName()
+                                + contextInfo
                                 + " buffer: "
                                 + bufferEncoded
                                 + ", fields="

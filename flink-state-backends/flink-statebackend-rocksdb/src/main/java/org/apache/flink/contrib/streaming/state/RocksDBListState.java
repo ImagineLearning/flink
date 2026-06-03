@@ -240,13 +240,15 @@ class RocksDBListState<K, N, V> extends AbstractRocksDBState<K, N, List<V>>
             Tuple2<ColumnFamilyHandle, RegisteredKeyValueStateBackendMetaInfo<N, SV>>
                     registerResult,
             RocksDBKeyedStateBackend<K> backend) {
-        return (IS)
+        RocksDBListState<K, N, E> state =
                 new RocksDBListState<>(
                         registerResult.f0,
                         registerResult.f1.getNamespaceSerializer(),
                         (TypeSerializer<List<E>>) registerResult.f1.getStateSerializer(),
                         (List<E>) stateDesc.getDefaultValue(),
                         backend);
+        state.setStateName(stateDesc.getName());
+        return (IS) state;
     }
 
     @SuppressWarnings("unchecked")
@@ -260,7 +262,8 @@ class RocksDBListState<K, N, V> extends AbstractRocksDBState<K, N, List<V>>
                         .setNamespaceSerializer(registerResult.f1.getNamespaceSerializer())
                         .setValueSerializer(
                                 (TypeSerializer<List<E>>) registerResult.f1.getStateSerializer())
-                        .setDefaultValue((List<E>) stateDesc.getDefaultValue());
+                        .setDefaultValue((List<E>) stateDesc.getDefaultValue())
+                        .setStateName(stateDesc.getName());
     }
 
     static class StateSnapshotTransformerWrapper<T> implements StateSnapshotTransformer<byte[]> {
