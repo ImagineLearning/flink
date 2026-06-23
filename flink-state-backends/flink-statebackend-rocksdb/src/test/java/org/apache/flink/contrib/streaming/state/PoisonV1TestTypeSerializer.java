@@ -33,15 +33,15 @@ import java.io.IOException;
  * A V1-schema serializer for {@link TestType} that WRITES valid bytes but FAILS to read, simulating
  * the QA "toxic state" scenario.
  *
- * <p>It declares itself {@code compatibleAfterMigration} against itself, so registering state with a
- * fresh instance on restore forces {@code RocksDBKeyedStateBackend.migrateStateValues} to run. That
- * migration loop reads each value with the prior serializer ({@code migrateSerializedValue} ->
+ * <p>It declares itself {@code compatibleAfterMigration} against itself, so registering state with
+ * a fresh instance on restore forces {@code RocksDBKeyedStateBackend.migrateStateValues} to run.
+ * That migration loop reads each value with the prior serializer ({@code migrateSerializedValue} ->
  * {@code priorSerializer.deserialize}), which throws here.
  *
  * <p>Before throwing, it captures whatever {@link DeserializationContext} holds. PR #22 (JET-2518)
  * populates that context with the keyed-state key + state name during migration; without the PR it
- * is empty. Tests assert on the captured values, giving a clean base-vs-PR diff that does not depend
- * on PojoSerializer or the CONTINUE_ON_POJO_DESERIALIZATION_FAILURE env flag.
+ * is empty. Tests assert on the captured values, giving a clean base-vs-PR diff that does not
+ * depend on PojoSerializer or the CONTINUE_ON_POJO_DESERIALIZATION_FAILURE env flag.
  */
 public class PoisonV1TestTypeSerializer extends TestTypeSerializerBase {
 
