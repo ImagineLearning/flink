@@ -28,7 +28,7 @@ under the License.
 
 	<groupId>org.apache.flink</groupId>
 	<artifactId>flink-parent</artifactId>
-	<version>1.20.3.il.2</version>
+	<version>${otk.build.version}</version>
 
 	<name>Flink : </name>
 	<packaging>pom</packaging>
@@ -107,6 +107,9 @@ under the License.
 	</modules>
 
 	<properties>
+		<!-- OTK-assigned build version. Defaults to 1.0-SNAPSHOT for local/non-CI builds;
+		     OTK CI/CD overrides it via -Dotk.build.version=<date>-<commit-hash> -->
+		<otk.build.version>1.0-SNAPSHOT</otk.build.version>
 		<skipTests>true</skipTests> <!-- Skip tests by default, use -DskipTests=false to override -->
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -1556,6 +1559,34 @@ under the License.
 
 	<build>
 		<plugins>
+			<!-- Resolve ${otk.build.version} into a literal version in deployed/installed poms
+			     so downstream consumers (flink-statefun) get a usable pom. -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>flatten-maven-plugin</artifactId>
+				<version>1.6.0</version>
+				<configuration>
+					<flattenMode>ossrh</flattenMode>
+					<updatePomFile>true</updatePomFile>
+				</configuration>
+				<executions>
+					<execution>
+						<id>flatten</id>
+						<phase>process-resources</phase>
+						<goals>
+							<goal>flatten</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>flatten.clean</id>
+						<phase>clean</phase>
+						<goals>
+							<goal>clean</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
 			<!--
 			We need to include this here because some of our modules have transitive dependencies
 			on jdbm1, which is of type "bundle". This only works if you include the

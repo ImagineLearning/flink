@@ -27,6 +27,7 @@ import org.apache.flink.api.common.typeutils.TypeSerializerSnapshot;
 import org.apache.flink.api.common.typeutils.base.MapSerializer;
 import org.apache.flink.api.common.typeutils.base.MapSerializerSnapshot;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.runtime.DeserializationContext;
 import org.apache.flink.contrib.streaming.state.iterator.RocksMultiStateKeysIterator;
 import org.apache.flink.contrib.streaming.state.iterator.RocksStateKeysAndNamespaceIterator;
 import org.apache.flink.contrib.streaming.state.iterator.RocksStateKeysIterator;
@@ -902,6 +903,17 @@ public class RocksDBKeyedStateBackend<K> extends AbstractKeyedStateBackend<K> {
         @SuppressWarnings("unchecked")
         AbstractRocksDBState<?, ?, SV> rocksDBState = (AbstractRocksDBState<?, ?, SV>) state;
 
+        // Inputs for best-effort decoding of the keyed-state key, so that a failure to
+        // deserialize a value during migration can be attributed to a concrete key and state
+        // name (surfaced via DeserializationContext in PojoSerializer's error logging).
+        final TypeSerializer<K> keySerializer = getKeySerializer();
+        final TypeSerializer<N> namespaceSerializer = stateMetaInfo.f1.getNamespaceSerializer();
+        final boolean ambiguousKeyPossible =
+                CompositeKeySerializationUtils.isAmbiguousKeyPossible(
+                        keySerializer, namespaceSerializer);
+        final String migratingStateName = stateMetaInfo.f1.getName();
+        final DataInputDeserializer keyInput = new DataInputDeserializer();
+
         Snapshot rocksDBSnapshot = db.getSnapshot();
         try (RocksIteratorWrapper iterator =
                         RocksDBOperationUtils.getRocksIterator(db, stateMetaInfo.f0, readOptions);
@@ -912,13 +924,31 @@ public class RocksDBKeyedStateBackend<K> extends AbstractKeyedStateBackend<K> {
             DataInputDeserializer serializedValueInput = new DataInputDeserializer();
             DataOutputSerializer migratedSerializedValueOutput = new DataOutputSerializer(512);
             while (iterator.isValid()) {
+                // Best-effort decode of the composite key for error attribution. A key that
+                // fails to decode must never mask the real value-migration failure below.
+                Object currentKey = null;
+                try {
+                    keyInput.setBuffer(iterator.key());
+                    CompositeKeySerializationUtils.readKeyGroup(keyGroupPrefixBytes, keyInput);
+                    currentKey =
+                            CompositeKeySerializationUtils.readKey(
+                                    keySerializer, keyInput, ambiguousKeyPossible);
+                } catch (Throwable keyDecodeError) {
+                    // leave currentKey null; key decoding is purely for diagnostics
+                }
+
                 serializedValueInput.setBuffer(iterator.value());
 
-                rocksDBState.migrateSerializedValue(
-                        serializedValueInput,
-                        migratedSerializedValueOutput,
-                        stateMetaInfo.f1.getPreviousStateSerializer(),
-                        stateMetaInfo.f1.getStateSerializer());
+                DeserializationContext.set(currentKey, migratingStateName);
+                try {
+                    rocksDBState.migrateSerializedValue(
+                            serializedValueInput,
+                            migratedSerializedValueOutput,
+                            stateMetaInfo.f1.getPreviousStateSerializer(),
+                            stateMetaInfo.f1.getStateSerializer());
+                } finally {
+                    DeserializationContext.clear();
+                }
 
                 batchWriter.put(
                         stateMetaInfo.f0,
