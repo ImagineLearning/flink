@@ -921,6 +921,14 @@ public class RocksDBKeyedStateBackend<K> extends AbstractKeyedStateBackend<K> {
                         new RocksDBWriteBatchWrapper(db, getWriteOptions(), getWriteBatchSize())) {
             iterator.seekToFirst();
 
+            // When enabled, an entry that cannot be migrated (e.g. its value fails to
+            // deserialize with the prior serializer) is DELETED from RocksDB and migration
+            // continues, instead of failing the whole restore. This is destructive: the
+            // dropped keyed-state value is lost and must be rebuilt/backfilled downstream.
+            // Off by default, this method preserves stock Flink fail-fast behavior.
+            final boolean dropUnmigratableEntries =
+                    "true".equals(System.getenv("DROP_UNMIGRATABLE_STATE_ENTRIES"));
+
             DataInputDeserializer serializedValueInput = new DataInputDeserializer();
             DataOutputSerializer migratedSerializedValueOutput = new DataOutputSerializer(512);
             while (iterator.isValid()) {
@@ -939,6 +947,7 @@ public class RocksDBKeyedStateBackend<K> extends AbstractKeyedStateBackend<K> {
 
                 serializedValueInput.setBuffer(iterator.value());
 
+                boolean migrated = false;
                 DeserializationContext.set(currentKey, migratingStateName);
                 try {
                     rocksDBState.migrateSerializedValue(
@@ -946,16 +955,32 @@ public class RocksDBKeyedStateBackend<K> extends AbstractKeyedStateBackend<K> {
                             migratedSerializedValueOutput,
                             stateMetaInfo.f1.getPreviousStateSerializer(),
                             stateMetaInfo.f1.getStateSerializer());
+                    migrated = true;
+                } catch (Throwable migrationError) {
+                    if (!dropUnmigratableEntries) {
+                        throw migrationError;
+                    }
+                    // Drop the un-migratable entry and keep migrating the rest.
+                    batchWriter.remove(stateMetaInfo.f0, iterator.key());
+                    LOG.warn(
+                            "Dropping un-migratable state entry [state={}, key={}] during "
+                                    + "migration because DROP_UNMIGRATABLE_STATE_ENTRIES is set. "
+                                    + "The value is permanently deleted and must be rebuilt "
+                                    + "downstream.",
+                            migratingStateName,
+                            currentKey,
+                            migrationError);
                 } finally {
                     DeserializationContext.clear();
                 }
 
-                batchWriter.put(
-                        stateMetaInfo.f0,
-                        iterator.key(),
-                        migratedSerializedValueOutput.getCopyOfBuffer());
-
-                migratedSerializedValueOutput.clear();
+                if (migrated) {
+                    batchWriter.put(
+                            stateMetaInfo.f0,
+                            iterator.key(),
+                            migratedSerializedValueOutput.getCopyOfBuffer());
+                    migratedSerializedValueOutput.clear();
+                }
                 iterator.next();
             }
         } finally {
